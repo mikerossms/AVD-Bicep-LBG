@@ -1,14 +1,9 @@
 /*
-The Backplane is simply a way of coordinating all of the moving part of this deployment so you dont have to deploy each section individually.
-This bicep script will call the following in this order:
-
-network.bicep
-hostpool.bicep
-hosts.bicep
+The Diagnostics BICEP script deploys two resources - Log Analystic Workspace and a Storage Account.
+The LAW is used for general diagnostic input from all the other deployed resources
+The storage account is used for boot diagnostics.
 
 The entire bicep script will be run in "Resource Group" mode, so the resources will need to be deployed into an existing RG
-
-You might notice that diagnostics.bicep is not called here.  Why? Because the diagnostics bicep deploys to a different resource group to the rest of the components.
 */
 
 //TARGET SCOPE
@@ -24,7 +19,7 @@ targetScope = 'resourceGroup'
 param location string = 'uksouth'
 
 //This is an example where the parameter passed in is limited to only that within the allowed list.  Anything else will cause an error
-@description ('The local environment - this is appended to the name of a resource')
+@description ('Optional: The local environment - this is appended to the name of a resource')
 @allowed([
   'dev'
   'test'
@@ -40,58 +35,96 @@ param localEnv string = 'dev' //dev, test, uat, prod
 param uniqueName string
 
 @description ('Optional: The name of the workload to deploy - will make up part of the name of a resource')
-param workloadName string = 'avd'
+param workloadName string = 'diag'
 
-//this is an example of where you can build the default value from other parameters already passed in (or using their defaults)
-//in this case, it also converts the entire default value to lower case
-@description ('The name of the already created resource group to deploy the AVD components into')
-param rgAVDName string = toLower('rg-${workloadName}-${location}-${localEnv}-${uniqueName}')
+//This component is a bit more complex as it is an object.  This is passed in from powershell as a @{} type object
+//Tags are really useful and show, as part of good practice, be applied to all resources and resource groups (where possible)
+//They are used to help manage the service.  Resources that are tagged can then be used to create cost reports, or to find all resources assicated with a particular tag
+@description('Optional: An object (think hash) that contains the tags to apply to all resources.')
+param tags object = {
+  environment: localEnv
+  workload: workloadName
+}
 
-@description ('The name of the already created resource group to deploy the Diagnostic components into')
-param rgDiagName string = toLower('rg-${workloadName}-${location}-${localEnv}-${uniqueName}')
+//Notice in this paramater case, we are using integers.  If passing in from powershell, we may need to use casting using the [int] type
+@description('Optional: The number of days to retain data in the Log Analytics Workspace')
+param lawDataRetention int = 30
 
 //VARIABLES
 // Variables are created at runtime and are usually used to build up resource names where not defined as a parameter, or to use functions and logic to define a value
 // In most cases, you could just provide these as defaulted parameters, however you cannot use logic on parameters
 //Variables are defined in the code and, unlike parameters, cannot be passed in and so remain fixed inside the template.
 
+var lawName = toLower('law-${workloadName}-${location}-${localEnv}-${uniqueName}')
+var lawSKU = 'PerGB2018'
+var storageAccountName = toLower('st${workloadName}${location}${localEnv}${uniqueName}')
+
 //RESOURCES
-//Resources are all deployed as MODULES.  Each module defines a block of BICEP code and are listed above
-//Both Modules and Resources have Inputs and Outputs.
-//Please ntoe the use of "Scope" in the module definition.  This is how you tell the module which resource group to deploy to.
 
-//Deploy the Diagnostics resources
-module Diagnostics 'diagnostics.bicep' = {
-  name: 'Diagnostics'
-  scope: resourceGroup(rgDiagName)
-  params: {
+//Deploy the Log Analytics Workspace (notice the name is not actually log analytics workspace but Operational Insights)
+//When you come to deploy an agent on the Hostpool Hosts, you will need to use the new Azure Monitoring Agent (AMA) and not the old Log Analytics (OMS) agent
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  location: location
+  name: lawName
+  tags: tags
+  properties: {
+    sku: {
+      name: lawSKU
+    }
+    retentionInDays: lawDataRetention
   }
 }
 
-//Deploy the Network resources
-module Network 'network.bicep' = {
-  name: 'Network'
-  scope: resourceGroup(rgAVDName)
-  params: {
 
+//Deploy the Storage account
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  name: storageAccountName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  tags: tags
+  properties: {
+    allowSharedKeyAccess: true
+    accessTier: 'Hot'
+    supportsHttpsTrafficOnly: true
+    isHnsEnabled: false
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: true
+    publicNetworkAccess: 'Disabled'
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: 'Deny'
+      ipRules: []
+      virtualNetworkRules: []
+    }
   }
 }
 
-//Deploy the HostPool resources
-module HostPool 'hostpool.bicep' = {
-  name: 'HostPool'
-  scope: resourceGroup(rgAVDName)
-  params: {
 
+//Set up diagnostic logs on the storage account
+resource storageAccount_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${storageAccountName}-diag'
+  properties: {
+    workspaceId: logAnalyticsWorkspace.id
+    metrics: [
+      {
+        category: 'Capacity'
+        enabled: true
+        retentionPolicy: {
+          days: lawDataRetention
+          enabled: true
+        }
+      }
+    ]
   }
+  scope: storageAccount
 }
 
-//DEploy the Hosts for the host pool
-module Hosts 'hosts.bicep' = {
-  name: 'Hosts'
-  scope: resourceGroup(rgAVDName)
-  params: {
-
-  }
-}
+//OUTPUTS
+output lawName string = lawName
+output lawID string = logAnalyticsWorkspace.id
+output bootDiagStorageName string = storageAccountName
+output bootDiagStorageID string = storageAccount.id
 
