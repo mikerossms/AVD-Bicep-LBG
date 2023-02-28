@@ -76,7 +76,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
 }
 
 
-//Deploy the Storage account
+//Deploy the Storage account - this allows Azure Services to access the storage account
 resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   name: storageAccountName
   location: location

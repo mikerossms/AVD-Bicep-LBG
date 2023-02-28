@@ -24,7 +24,7 @@ targetScope = 'resourceGroup'
 param location string = 'uksouth'
 
 //This is an example where the parameter passed in is limited to only that within the allowed list.  Anything else will cause an error
-@description ('The local environment - this is appended to the name of a resource')
+@description ('Optional: The local environment - this is appended to the name of a resource')
 @allowed([
   'dev'
   'test'
@@ -41,6 +41,15 @@ param uniqueName string
 
 @description ('Optional: The name of the workload to deploy - will make up part of the name of a resource')
 param workloadName string = 'avd'
+
+//This component is a bit more complex as it is an object.  This is passed in from powershell as a @{} type object
+//Tags are really useful and show, as part of good practice, be applied to all resources and resource groups (where possible)
+//They are used to help manage the service.  Resources that are tagged can then be used to create cost reports, or to find all resources assicated with a particular tag
+@description('Optional: An object (think hash) that contains the tags to apply to all resources.')
+param tags object = {
+  environment: localEnv
+  workload: workloadName
+}
 
 //this is an example of where you can build the default value from other parameters already passed in (or using their defaults)
 //in this case, it also converts the entire default value to lower case
