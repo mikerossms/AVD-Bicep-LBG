@@ -21,6 +21,20 @@ param (
 $diagRGName = "rg-$workloadNameDiag-$location-$localEnv-$uniqueIdentifier"
 $avdRGName = "rg-$workloadNameAVD-$location-$localEnv-$uniqueIdentifier"
 
+$domainName = "lbgworkshop.local"
+$domainAdminUsername = "commander"
+$domainAdminPassword = Read-Host -Prompt "Enter the Domain Admin password" -AsSecureString
+$localAdminUsername = "localadmin"
+$localAdminPassword = Read-Host -Prompt "Enter the Local Admin password" -AsSecureString
+
+$avdVnetCIDR = "10.220.1.0/24"
+$avdSnetCIDR = $avdVnetCIDR
+
+$adServerIPAddresses = @(
+  '10.230.0.5'
+  '10.230.0.6'
+)
+
 $tags = @{
     Environment=$localEnv
     Owner="LBG"
@@ -81,21 +95,28 @@ if (-not (Get-AzResourceGroup -Name $avdRGName -ErrorAction SilentlyContinue)) {
 }
 
 #Deploy the AVD backplane bicep code.
-# Write-Host "Deploying backplane.bicep to Resource Group: $avdRGName" -ForegroundColor Green
-# $diagOutput = New-AzResourceGroupDeployment -Name "Deploy-Diagnostics" -ResourceGroupName $avdRGName -TemplateFile "$PSScriptRoot/AVD-Code/FullCode/backplane.bicep" -Verbose -TemplateParameterObject @{
-#     location=$location
-#     localEnv=$localEnv
-#     uniqueName=$uniqueIdentifier
-#     tags=$tags
-#     workloadName=$workloadNameDiag
-#     rgAVDName=$avdRGName
-#     rgDiagName=xx
-#     lawName=xx
-#     bootDiagStorageName=xx
-# }
-
-# if (-not $diagOutput ) {
-#     Write-Host "ERROR: Cannot deploy diagnostic.bicep to Resource Group: $avdRGName" -ForegroundColor Red
-#     exit 1
-# }
+Write-Host "Deploying backplane.bicep to Resource Group: $avdRGName" -ForegroundColor Green
+$backplaneOutput = New-AzResourceGroupDeployment -Name "Deploy-Backplane" `
+ -ResourceGroupName $avdRGName `
+ -TemplateFile "$PSScriptRoot/../Bicep/backplane.bicep" `
+ -domainAdminPassword $domainAdminPassword `
+ -localAdminPassword $localAdminPassword `
+ -Verbose `
+ -TemplateParameterObject @{
+    location=$location
+    localEnv=$localEnv
+    uniqueName=$uniqueIdentifier
+    tags=$tags
+    workloadName=$workloadNameDiag
+    rgAVDName=$avdRGName
+    rgDiagName=$diagRGName
+    lawName=$diagOutput.Outputs.lawName.Value
+    bootDiagStorageName=$diagOutput.Outputs.bootDiagStorageName.Value
+    domainName=$domainName
+    domainAdminUsername=$domainAdminUsername
+    localAdminUsername=$localAdminUsername
+    avdVnetCIDR=$avdVnetCIDR
+    avdSnetCIDR=$avdSnetCIDR
+    adServerIPAddresses=$adServerIPAddresses
+}
 

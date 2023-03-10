@@ -9,6 +9,10 @@ hosts.bicep
 The entire bicep script will be run in "Resource Group" mode, so the resources will need to be deployed into an existing RG
 
 You might notice that diagnostics.bicep is not called here.  Why? Because the diagnostics bicep deploys to a different resource group to the rest of the components.
+
+Useful links:
+Resource abbreviations: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations
+
 */
 
 //TARGET SCOPE
@@ -56,6 +60,36 @@ param tags object = {
 @description ('The name of the already created resource group to deploy the AVD components into')
 param rgAVDName string = toLower('rg-${workloadName}-${location}-${localEnv}-${uniqueName}')
 
+//Domain Details
+@description('Required: The name of the domain to join the VMs to')
+param domainName string
+@description('Required: The username of the domain admin account')
+param domainAdminUsername string
+@secure()
+@description('Required: The password for the domain admin account')
+param domainAdminPassword string
+
+//Local Host Details
+@description('Required: The username for the local admin account')
+param localAdminUsername string = ''
+@secure()
+@description('Required: The password for the local admin account')
+param localAdminPassword string
+
+//VNET Details
+param avdVnetCIDR string 
+param avdSnetCIDR string
+
+//Identity VNET Details
+@description('Optional: The name of the identity vnet to peer to')
+param identityVnetName string = 'vnet-identity'
+
+@description('Optional: The resource group containing the identity vnet to peer to')
+param identityVnetRG string = 'rg-identity'
+
+@description('Required: The IP addresses of the AD server or AADDS that the VNET will used for name lookup')
+param adServerIPAddresses array
+
 //Diagnostics
 @description ('Required: The name of the resource group where the diagnostics components have been deployed to')
 param rgDiagName string
@@ -74,7 +108,6 @@ param bootDiagStorageName string
 //RESOURCES
 //Resources are all deployed as MODULES.  Each module defines a block of BICEP code and are listed above
 //Both Modules and Resources have Inputs and Outputs.
-//Please ntoe the use of "Scope" in the module definition.  This is how you tell the module which resource group to deploy to.
 
 //Get the existing Diagnostics Module - the diagnostics module should already have been deployed to a different resource group
 //Note the use of two components - existing and scope
@@ -88,27 +121,76 @@ resource LAWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' exist
 //Deploy the Network resources
 module Network 'network.bicep' = {
   name: 'Network'
-  scope: resourceGroup(rgAVDName)
   params: {
+    location: location
+    localEnv: localEnv
+    uniqueName: uniqueName
+    workloadName: workloadName
+    tags: tags
+    vnetCIDR: avdVnetCIDR
+    snetCIDR: avdSnetCIDR
+    diagnosticWorkspaceId: LAWorkspace.id
+    identityVnetName: identityVnetName
+    identityVnetRG: identityVnetRG
+    adServerIPAddresses: adServerIPAddresses
+  }
+}
 
+//Deploy a KeyVault - this is required to store the domain admin and local admin password
+//This also creates a secret for both the domain and local passwords
+//Technically this is not actually needed as you are providing these passwords via parameters, however it is good practice to store passwords in KeyVault
+//And typically this would be how it was done.  It can also then be used for adding new hosts later.
+module KeyVault 'keyvault.bicep' = {
+  name: 'KeyVault'
+  params: {
+    location: location
+    localEnv: localEnv
+    uniqueName: uniqueName
+    workloadName: workloadName
+    tags: tags
+    diagnosticWorkspaceId: LAWorkspace.id
+    domainAdminPassword: domainAdminPassword
+    localAdminPassword: localAdminPassword
   }
 }
 
 //Deploy the HostPool resources
 module HostPool 'hostpool.bicep' = {
   name: 'HostPool'
-  scope: resourceGroup(rgAVDName)
   params: {
-
+    location: location
+    localEnv: localEnv
+    uniqueName: uniqueName
+    workloadName: workloadName
+    tags: tags
+    diagnosticWorkspaceId: LAWorkspace.id
+    domainName: domainName
+    identityKeyvaultName: KeyVault.outputs.keyVaultName
   }
+}
+
+//Pull in the keyvault just created (required to access both the domain and local admin passwords)
+resource KeyVaultRetrieve 'Microsoft.KeyVault/vaults@2022-11-01' existing = {
+  name: KeyVault.outputs.keyVaultName
 }
 
 //DEploy the Hosts for the host pool
 module Hosts 'hosts.bicep' = {
   name: 'Hosts'
-  scope: resourceGroup(rgAVDName)
   params: {
-
+    location: location
+    localEnv: localEnv
+    uniqueName: uniqueName
+    workloadName: workloadName
+    tags: tags
+    diagnosticWorkspaceId: LAWorkspace.id
+    adminUserName: localAdminUsername
+    adminPassword: KeyVaultRetrieve.getSecret('LocalAdminPassword')
+    domainUsername: domainAdminUsername
+    domainPassword: KeyVaultRetrieve.getSecret('DomainAdminPassword')
+    domainName: domainName
+    subnetID: Network.outputs.snetID
+    hostPoolName: HostPool.outputs.hostPoolName
   }
 }
 
