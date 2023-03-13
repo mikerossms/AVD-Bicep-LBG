@@ -69,6 +69,9 @@ param domainAdminUsername string
 @description('Required: The password for the domain admin account')
 param domainAdminPassword string
 
+@description('Required: The OU path to join the VMs to (i.e. the LDAP path within the AD server visible under "users and computers")')
+param domainOUPath string
+
 //Local Host Details
 @description('Required: The username for the local admin account')
 param localAdminUsername string = ''
@@ -99,6 +102,11 @@ param lawName string
 
 @description ('Required: The name of the storage account in the diagnostics RG to be used for Boot Diagnostics')
 param bootDiagStorageName string
+
+@description('Whether on not to deploy/update the keyvault')
+param deployVault bool = true
+
+param numberOfHostsToDeploy int = 1
 
 //VARIABLES
 // Variables are created at runtime and are usually used to build up resource names where not defined as a parameter, or to use functions and logic to define a value
@@ -140,7 +148,7 @@ module Network 'network.bicep' = {
 //This also creates a secret for both the domain and local passwords
 //Technically this is not actually needed as you are providing these passwords via parameters, however it is good practice to store passwords in KeyVault
 //And typically this would be how it was done.  It can also then be used for adding new hosts later.
-module KeyVault 'keyvault.bicep' = {
+module KeyVault 'keyvault.bicep' = if (deployVault) {
   name: 'KeyVault'
   params: {
     location: location
@@ -174,13 +182,14 @@ resource KeyVaultRetrieve 'Microsoft.KeyVault/vaults@2022-11-01' existing = {
   name: KeyVault.outputs.keyVaultName
 }
 
-//DEploy the Hosts for the host pool
-module Hosts 'hosts.bicep' = {
-  name: 'Hosts'
+//Deploy the Hosts for the host pool.  this applies a FOR loop to build out <n> hosts as defined by numberOfHostsToDeploy
+module Hosts 'host.bicep' = [for i in range(0, numberOfHostsToDeploy): {
+  name: 'Hosts${i}'
   params: {
     location: location
     localEnv: localEnv
     uniqueName: uniqueName
+    hostNumber: i
     workloadName: workloadName
     tags: tags
     diagnosticWorkspaceId: LAWorkspace.id
@@ -188,6 +197,7 @@ module Hosts 'hosts.bicep' = {
     adminPassword: KeyVaultRetrieve.getSecret('LocalAdminPassword')
     domainUsername: domainAdminUsername
     domainPassword: KeyVaultRetrieve.getSecret('DomainAdminPassword')
+    domainOUPath: domainOUPath
     domainName: domainName
     subnetID: Network.outputs.snetID
     hostPoolName: HostPool.outputs.hostPoolName
@@ -195,5 +205,5 @@ module Hosts 'hosts.bicep' = {
   dependsOn: [
     HostPool
   ]
-}
+}]
 

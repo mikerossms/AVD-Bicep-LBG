@@ -14,7 +14,8 @@ param (
     [String]$subID = "152aa2a3-2d82-4724-b4d5-639edab485af",
     [String]$workloadNameAVD = "avd",
     [String]$workloadNameDiag = "diag",
-    [Bool]$dologin = $true
+    [Bool]$dologin = $true,
+    [Bool]$updateVault = $true
 )
 
 
@@ -22,10 +23,24 @@ $diagRGName = "rg-$workloadNameDiag-$location-$localEnv-$uniqueIdentifier"
 $avdRGName = "rg-$workloadNameAVD-$location-$localEnv-$uniqueIdentifier"
 
 $domainName = "quberatron.com"
-$domainAdminUsername = "commander"
-$domainAdminPassword = Read-Host -Prompt "Enter the Domain Admin password" -AsSecureString
+$domainAdminUsername = "vmjoiner"
+$domainOUPath = "OU=LBGAVD,DC=quberatron,DC=com"
 $localAdminUsername = "localadmin"
-$localAdminPassword = Read-Host -Prompt "Enter the Local Admin password" -AsSecureString
+
+#Note: This is required as we are passing in a secure() string to the bicep code and it must be converted to a secure string in powershell
+#and secure string cannot be blank
+$domainAdminPassword = ConvertTo-SecureString -String 'noupdate' -AsPlainText -Force
+$localAdminPassword = ConvertTo-SecureString -String 'noupdate' -AsPlainText -Force
+
+#Get the new admin passwords and update/create the vault if required otherwise skip this.
+if ($updateVault) {
+    Write-Host "Note: They KeyVault and its admin passwords will be updated" -ForegroundColor Yellow
+    Write-Host 'If you dont want to do this, press Ctrl+C twice, add "-updateVault $false" to the script parameters and run again' -ForegroundColor Yellow
+    $domainAdminPassword = Read-Host -Prompt "Enter the Domain Admin password" -AsSecureString
+    $localAdminPassword = Read-Host -Prompt "Enter the Local Admin password" -AsSecureString
+} else {
+    Write-Host "Password setting skipped - using existing values in keyvault.  Vault will not be updated" -ForegroundColor Yellow
+}
 
 $avdVnetCIDR = "10.200.1.0/24"
 $avdSnetCIDR = $avdVnetCIDR
@@ -114,9 +129,11 @@ $backplaneOutput = New-AzResourceGroupDeployment -Name "Deploy-Backplane" `
     bootDiagStorageName=$diagOutput.Outputs.bootDiagStorageName.Value
     domainName=$domainName
     domainAdminUsername=$domainAdminUsername
+    domainOUPath=$domainOUPath
     localAdminUsername=$localAdminUsername
     avdVnetCIDR=$avdVnetCIDR
     avdSnetCIDR=$avdSnetCIDR
     adServerIPAddresses=$adServerIPAddresses
+    deployVault=$updateVault
 }
 

@@ -91,7 +91,7 @@ resource virtualNetwork_diagnosticSettings 'Microsoft.Insights/diagnosticSetting
 }
 
 //Add the Domain Admin Password securet to the vault
-resource DomainAdminPwd 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+resource DomainAdminPwd 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = if (!empty(domainAdminPassword)) {
   name: 'DomainAdminPassword'
   parent: Vault
   properties: {
@@ -101,7 +101,7 @@ resource DomainAdminPwd 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
 }
 
 //Add the Local Admin Password securet to the vault
-resource LocalAdminPwd 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+resource LocalAdminPwd 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = if (!empty(localAdminPassword)) {
   name: 'LocalAdminPassword'
   parent: Vault
   properties: {

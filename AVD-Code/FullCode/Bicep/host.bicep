@@ -1,5 +1,5 @@
 /*
-This module is used to build <n> hosts and add them to both the host pool and the AD server.  Once these are up and running you should
+This module is used to build a host vm and add them to both the host pool and the AD server.  Once these are up and running you should
 be able to log into AVD.
 */
 
@@ -29,9 +29,6 @@ param tags object
 param diagnosticWorkspaceId string
 
 //Host Settings
-@description('Required: The number of hosts to deploy')
-param numberOfHostsToDeploy int = 1
-
 @description('Required: The local admin user name for the host')
 param adminUserName string
 
@@ -49,6 +46,9 @@ param domainPassword string
 @description('Required: The name of the domain to join the VMs to')
 param domainName string
 
+@description('Required: The OU path to join the VMs to (i.e. the LDAP path within the AD server visible under "users and computers")')
+param domainOUPath string
+
 @description('Optional: The size of the VM to deploy.  Default is Standard_D2s_v3')
 param vmSize string = 'Standard_D2s_v3'
 
@@ -58,15 +58,17 @@ param subnetID string
 @description('Required: The name of the host pool to add the hosts to')
 param hostPoolName string
 
+param hostNumber int = 1
+
 //VARIABLES
 //the base base name for each VM created
-var vmName = toLower('host-${workloadName}-${location}-${localEnv}-${uniqueName}')
+var vmName = toLower('host-${workloadName}-${location}-${localEnv}-${uniqueName}-${hostNumber}')
 
 //the base host name (i.e. within windows itself) for each VM created
-var vmHostName = toLower('host${workloadName}${uniqueName}')
+var vmHostName = toLower('host${workloadName}${uniqueName}${hostNumber}')
 
 //the base Network Interface name for each VM created
-var vmNicName = toLower('nic-${workloadName}-${location}-${localEnv}-${uniqueName}')
+var vmNicName = toLower('nic-${workloadName}-${location}-${localEnv}-${uniqueName}${hostNumber}')
 
 //The version of windows to deploy
 var vmImageObject = {
@@ -87,8 +89,8 @@ resource law 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
 }
 
 //Create Network interfaces for each of the VMs being deployed
-resource vmNic 'Microsoft.Network/networkInterfaces@2022-07-01' = [for i in range(0, numberOfHostsToDeploy): {
-  name: '${vmNicName}_${i}'
+resource vmNic 'Microsoft.Network/networkInterfaces@2022-07-01' = {
+  name: vmNicName
   location: location
   tags: tags
   properties: {
@@ -105,11 +107,11 @@ resource vmNic 'Microsoft.Network/networkInterfaces@2022-07-01' = [for i in rang
       }
     ]
   }
-}]
+}
 
 //Deploy "numberOfHostToDeploy" x virtual machines
-resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
-  name: '${vmName}_${i}'
+resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = {
+  name: vmName
   location: location
   tags: tags
   identity: {
@@ -136,7 +138,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, 
 
     osProfile: {
       //Set up the host VM windows defaults e.g. local admin, name, patching etc.
-      computerName: '${vmHostName}${i}'
+      computerName: vmHostName
       adminUsername: adminUserName
       adminPassword: adminPassword
       windowsConfiguration: {
@@ -154,7 +156,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, 
     networkProfile: {
       networkInterfaces: [
         {
-          id: vmNic[i].id
+          id: vmNic.id
         }
       ]
     }
@@ -166,87 +168,91 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-11-01' = [for i in range(0, 
       }
     }
   }
-}]
+}
 
 //VM Extensions - these are used to carry out actions and install components onto the VM
 //Bicep naturally tries and deploy these in parallel which, depending on what the extension is doing can cause conflicts
 //As a general rule of thumb it is usually a good idea to deploy extensions in a serial fashion using "dependsOn" to ensure they are deployed in the correct order
 
 //Anti Malware Extension
-resource vmAntiMalware 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
-  name: 'AntiMalware'
-  parent: vm[i]
-  location: location
-  tags: tags
-  properties: {
-    publisher: 'Microsoft.Azure.Security'
-    type: 'IaaSAntimalware'
-    typeHandlerVersion: '1.6'
-    autoUpgradeMinorVersion: true
-    settings: {
-      AntimalwareEnabled: 'true'
-      RealtimeProtectionEnabled: 'true'
-      ScheduledScanSettings: {
-        isEnabled: 'true'
-        day: 'Sunday'
-        time: '23:00'
-      }
-      Exclusions: {
-        extensions: ''
-        paths: ''
-        processes: ''
-      }
-    }
-  }
-}]
-
-//Monitoring Extension
-// resource vmMonitoring 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
-//   name: 'MicrosoftMonitoringAgent'
+// resource VMAntiMalware 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
+//   name: 'AntiMalware'
 //   parent: vm[i]
 //   location: location
 //   tags: tags
 //   properties: {
-//     publisher: 'Microsoft.EnterpriseCloud.Monitoring'
-//     type: 'MicrosoftMonitoringAgent'
-//     typeHandlerVersion: '1.0'
+//     publisher: 'Microsoft.Azure.Security'
+//     type: 'IaaSAntimalware'
+//     typeHandlerVersion: '1.3'
 //     autoUpgradeMinorVersion: true
-//     enableAutomaticUpgrade: false
 //     settings: {
-//       workspaceId: law.id
-//     }
-//     protectedSettings: {
-//       workspaceKey: law.listKeys().primarySharedKey
+//       AntimalwareEnabled: 'true'
+//       RealtimeProtectionEnabled: 'true'
+//       ScheduledScanSettings: {
+//         isEnabled: 'true'
+//         day: 'Sunday'
+//         time: '23:00'
+//       }
+//       Exclusions: {
+//         extensions: ''
+//         paths: ''
+//         processes: ''
+//       }
 //     }
 //   }
+// }]
+
+//Monitoring Extension
+resource VMMonitoring 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = {
+  name: 'MicrosoftMonitoringAgent'
+  parent: vm
+  location: location
+  tags: tags
+  properties: {
+    publisher: 'Microsoft.EnterpriseCloud.Monitoring'
+    type: 'MicrosoftMonitoringAgent'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+    enableAutomaticUpgrade: false
+    settings: {
+      workspaceId: law.id
+    }
+    protectedSettings: {
+      workspaceKey: law.listKeys().primarySharedKey
+    }
+  }
 // dependsOn: [
 //   vmAntiMalware[i]
 //   ]
-// }]
+}
 
 
-// //Join the Domain (you can also now join the AAD in certain scenarious, but AVD is not yet supported for anything other than personal machines)
-// resource vmDomainJoin 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
-//   name: '${vmName}_${i}/DomainJoin'
-//   location: location
-//   tags: tags
-//   properties: {
-//     publisher: 'Microsoft.Compute'
-//     type: 'JsonADDomainExtension'
-//     typeHandlerVersion: '1.9'
-//     autoUpgradeMinorVersion: true
-//     settings: {
-//       name: domainName
-//       OUPath: ''
-//       user: domainUsername
-//       restart: 'true'
-//       options: '3'
-//     }
-//     protectedSettings: {
-//       password: domainPassword
-//     }
-//   }
-// }]
+//Join the Domain (you can also now join the AAD in certain scenarios, but AVD is not yet supported for anything other than personal machines)
+resource VMDomainJoin 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = {
+  name: 'JoinDomain'
+  parent: vm
+  location: location
+  tags: tags
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'JsonADDomainExtension'
+    typeHandlerVersion: '1.3'
+    autoUpgradeMinorVersion: true
+    settings: {
+      name: domainName
+      OUPath: domainOUPath
+      user: domainUsername
+      restart: 'true'
+      options: '3'
+    }
+    protectedSettings: {
+      password: domainPassword
+    }
+  }
+  dependsOn: [
+    VMMonitoring
+  ]
+}
 
 // //As we need the latest hostpool token, we need to pull in the Host Pool resource and get the latest token from there
 // resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2022-09-09' existing = {
