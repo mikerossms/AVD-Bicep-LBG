@@ -201,28 +201,28 @@ resource vmAntiMalware 'Microsoft.Compute/virtualMachines/extensions@2022-11-01'
 }]
 
 //Monitoring Extension
-resource vmMonitoring 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
-  name: 'MicrosoftMonitoringAgent'
-  parent: vm[i]
-  location: location
-  tags: tags
-  properties: {
-    publisher: 'Microsoft.EnterpriseCloud.Monitoring'
-    type: 'MicrosoftMonitoringAgent'
-    typeHandlerVersion: '1.0'
-    autoUpgradeMinorVersion: true
-    enableAutomaticUpgrade: false
-    settings: {
-      workspaceId: law.id
-    }
-    protectedSettings: {
-      workspaceKey: law.listKeys().primarySharedKey
-    }
-  }
-dependsOn: [
-  vmAntiMalware[i]
-  ]
-}]
+// resource vmMonitoring 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = [for i in range(0, numberOfHostsToDeploy): {
+//   name: 'MicrosoftMonitoringAgent'
+//   parent: vm[i]
+//   location: location
+//   tags: tags
+//   properties: {
+//     publisher: 'Microsoft.EnterpriseCloud.Monitoring'
+//     type: 'MicrosoftMonitoringAgent'
+//     typeHandlerVersion: '1.0'
+//     autoUpgradeMinorVersion: true
+//     enableAutomaticUpgrade: false
+//     settings: {
+//       workspaceId: law.id
+//     }
+//     protectedSettings: {
+//       workspaceKey: law.listKeys().primarySharedKey
+//     }
+//   }
+// dependsOn: [
+//   vmAntiMalware[i]
+//   ]
+// }]
 
 
 // //Join the Domain (you can also now join the AAD in certain scenarious, but AVD is not yet supported for anything other than personal machines)

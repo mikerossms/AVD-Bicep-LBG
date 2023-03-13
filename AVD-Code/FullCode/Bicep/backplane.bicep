@@ -192,5 +192,8 @@ module Hosts 'hosts.bicep' = {
     subnetID: Network.outputs.snetID
     hostPoolName: HostPool.outputs.hostPoolName
   }
+  dependsOn: [
+    HostPool
+  ]
 }
 

@@ -122,9 +122,9 @@ param tags object = {}
 
 //AADDS VNET
 param aaddsVnetName string = 'vnet-identity'
-param aaddsVnetAddressPrefix string = '10.230.0.0/24'
+param aaddsVnetAddressPrefix string = '10.240.0.0/24'
 param aaddsSnetName string = 'snet-identity'
-param aaddsSnetAddressPrefix string = '10.230.0.0/24'
+param aaddsSnetAddressPrefix string = '10.240.0.0/24'
 param aaddsNSGName string = 'aadds-nsg'
 
 //VARIABLES
@@ -155,71 +155,6 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2022-09-01' = {
           destinationAddressPrefix: '*'
         }
       }
-      // {
-      //   name: 'AllowLDAP'
-      //   properties: {
-      //     priority: 120
-      //     protocol: 'Tcp'
-      //     access: 'Allow'
-      //     direction: 'Inbound'
-      //     sourcePortRange: '*'
-      //     destinationPortRange: '389'
-      //     sourceAddressPrefix: '*'
-      //     destinationAddressPrefix: '*'
-      //   }
-      // }
-      // {
-      //   name: 'AllowLDAPS'
-      //   properties: {
-      //     priority: 130
-      //     protocol: 'Tcp'
-      //     access: 'Allow'
-      //     direction: 'Inbound'
-      //     sourcePortRange: '*'
-      //     destinationPortRange: '636'
-      //     sourceAddressPrefix: '*'
-      //     destinationAddressPrefix: '*'
-      //   }
-      // }
-      // {
-      //   name: 'AllowKerberos'
-      //   properties: {
-      //     priority: 140
-      //     protocol: 'Tcp'
-      //     access: 'Allow'
-      //     direction: 'Inbound'
-      //     sourcePortRange: '*'
-      //     destinationPortRange: '88'
-      //     sourceAddressPrefix: '*'
-      //     destinationAddressPrefix: '*'
-      //   }
-      // }
-      // {
-      //   name: 'AllowKerberosSecure'
-      //   properties: {
-      //     priority: 150
-      //     protocol: 'Tcp'
-      //     access: 'Allow'
-      //     direction: 'Inbound'
-      //     sourcePortRange: '*'
-      //     destinationPortRange: '464'
-      //     sourceAddressPrefix: '*'
-      //     destinationAddressPrefix: '*'
-      //   }
-      // }
-      // {
-      //   name: 'AllowDNS'
-      //   properties: {
-      //     priority: 160
-      //     protocol: 'Udp'
-      //     access: 'Allow'
-      //     direction: 'Inbound'
-      //     sourcePortRange: '*'
-      //     destinationPortRange: '53'
-      //     sourceAddressPrefix: '*'
-      //     destinationAddressPrefix: '*'
-      //   }
-      // }
       {
         name: 'AllowPSRemoting'
         properties: {
@@ -278,11 +213,15 @@ resource domainService 'Microsoft.AAD/domainServices@2022-12-01' = {
       notifyGlobalAdmins: notifyGlobalAdmins
     }
     ldapsSettings: {
-      externalAccess: externalAccess
-      ldaps: ldaps
-      pfxCertificate: !empty(pfxCertificate) ? pfxCertificate : null
-      pfxCertificatePassword: !empty(pfxCertificatePassword) ? pfxCertificatePassword : null
+      ldaps: 'Disabled'
+      externalAccess: 'Disabled'
     }
+    // ldapsSettings: {
+    //   externalAccess: externalAccess
+    //   ldaps: ldaps
+    //   pfxCertificate: !empty(pfxCertificate) ? pfxCertificate : null
+    //   pfxCertificatePassword: !empty(pfxCertificatePassword) ? pfxCertificatePassword : null
+    // }
     replicaSets: replicaSets
     domainSecuritySettings: {
       tlsV1: tlsV1

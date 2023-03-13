@@ -1,4 +1,4 @@
-$domainName = 'lbgworkshop.local'
+$domainName = 'quberatron.com'
 
 #Check if I am a local admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")

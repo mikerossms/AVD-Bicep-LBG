@@ -8,10 +8,10 @@ To add
 
 #Get the runtime parameters from the user
 param (
-    [String]$uniqueIdentifier = "001",
+    [String]$uniqueIdentifier = "full",
     [String]$location = "uksouth",
     [String]$localEnv = "dev",
-    [String]$subID = "8eef5bcc-4fc3-43bc-b817-048a708743c3",
+    [String]$subID = "152aa2a3-2d82-4724-b4d5-639edab485af",
     [String]$workloadNameAVD = "avd",
     [String]$workloadNameDiag = "diag",
     [Bool]$dologin = $true
@@ -21,18 +21,18 @@ param (
 $diagRGName = "rg-$workloadNameDiag-$location-$localEnv-$uniqueIdentifier"
 $avdRGName = "rg-$workloadNameAVD-$location-$localEnv-$uniqueIdentifier"
 
-$domainName = "lbgworkshop.local"
+$domainName = "quberatron.com"
 $domainAdminUsername = "commander"
 $domainAdminPassword = Read-Host -Prompt "Enter the Domain Admin password" -AsSecureString
 $localAdminUsername = "localadmin"
 $localAdminPassword = Read-Host -Prompt "Enter the Local Admin password" -AsSecureString
 
-$avdVnetCIDR = "10.220.1.0/24"
+$avdVnetCIDR = "10.200.1.0/24"
 $avdSnetCIDR = $avdVnetCIDR
 
 $adServerIPAddresses = @(
-  '10.230.0.5'
-  '10.230.0.6'
+  '10.240.0.5'
+  '10.240.0.6'
 )
 
 $tags = @{
@@ -107,7 +107,7 @@ $backplaneOutput = New-AzResourceGroupDeployment -Name "Deploy-Backplane" `
     localEnv=$localEnv
     uniqueName=$uniqueIdentifier
     tags=$tags
-    workloadName=$workloadNameDiag
+    workloadName=$workloadNameAVD
     rgAVDName=$avdRGName
     rgDiagName=$diagRGName
     lawName=$diagOutput.Outputs.lawName.Value
